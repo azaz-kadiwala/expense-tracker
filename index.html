@@ -1,226 +1,761 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Daily Expense Tracker</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body {
-      font-family: "Segoe UI", Arial, sans-serif;
-      background: #f8f9fa;
-      margin: 0;
-      padding: 20px;
-      color: #333;
-    }
-    h2 {
-      text-align: center;
-      color: #2b5797;
-    }
-    .container {
-      max-width: 900px;
-      margin: auto;
-      background: #fff;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    }
-    input, select, button {
-      margin: 5px;
-      padding: 8px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-    }
-    button {
-      background: #2b5797;
-      color: #fff;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #1e3d6b;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 15px;
-      font-size: 14px;
-    }
-    th, td {
-      border: 1px solid #ccc;
-      padding: 8px;
-      text-align: left;
-    }
-    th {
-      background: #eaf0fb;
-    }
-    #search {
-      width: 98%;
-      margin-top: 10px;
-    }
-    .summary {
-      display: flex;
-      justify-content: space-between;
-      margin: 10px 0;
-      font-weight: bold;
-      color: #2b5797;
-    }
-    canvas {
-      margin-top: 20px;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h2>💰 Daily Expense Tracker</h2>
-
-    <div>
-      <input type="date" id="date" />
-      <select id="type">
-        <option value="Expense">Expense</option>
-        <option value="Income">Income</option>
-      </select>
-      <input type="text" id="category" placeholder="Category" />
-      <input type="number" id="amount" placeholder="Amount" />
-      <input type="text" id="description" placeholder="Description" />
-      <button onclick="addRecord()">Add</button>
-      <button onclick="exportCSV()">Export CSV</button>
-    </div>
-
-    <input type="text" id="search" placeholder="🔍 Search by category or description..." onkeyup="filterRecords()" />
-
-    <div class="summary">
-      <div>Total Income: ₹<span id="totalIncome">0</span></div>
-      <div>Total Expense: ₹<span id="totalExpense">0</span></div>
-    </div>
-
-    <table id="recordsTable">
-      <thead>
-        <tr><th>Date</th><th>Type</th><th>Category</th><th>Amount</th><th>Description</th></tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-
-    <canvas id="monthlyChart"></canvas>
-  </div>
-
-  <script>
-    const scriptURL = "https://script.google.com/macros/s/AKfycbzrting3zxZIcxogi1QY7QsFYXyyQdwhIzgfqhmP_P9A4tVt-lOub7z2lrtS7rvWhmWFg/exec";
-
-    async function addRecord() {
-      const date = document.getElementById("date").value;
-      const type = document.getElementById("type").value;
-      const category = document.getElementById("category").value;
-      const amount = document.getElementById("amount").value;
-      const description = document.getElementById("description").value;
-
-      if (!date || !amount || !category) {
-        alert("Please fill Date, Category, and Amount.");
-        return;
-      }
-
-      const query = `${scriptURL}?action=add&date=${date}&type=${type}&category=${category}&amount=${amount}&description=${description}`;
-      await fetch(query);
-      alert("✅ Record Added!");
-      loadRecords();
-    }
-
-    async function loadRecords() {
-      const res = await fetch(`${scriptURL}?action=get`);
-      const data = await res.json();
-      const tbody = document.querySelector("#recordsTable tbody");
-      tbody.innerHTML = "";
-      let totalIncome = 0, totalExpense = 0;
-
-      data.slice(1).forEach(row => {
-        const tr = document.createElement("tr");
-        row.forEach(cell => {
-          const td = document.createElement("td");
-          td.textContent = cell;
-          tr.appendChild(td);
-        });
-        tbody.appendChild(tr);
-        if (row[1] === "Income") totalIncome += Number(row[3]);
-        else totalExpense += Number(row[3]);
-      });
-
-      document.getElementById("totalIncome").textContent = totalIncome.toFixed(2);
-      document.getElementById("totalExpense").textContent = totalExpense.toFixed(2);
-
-      loadChart(data);
-    }
-
-    function filterRecords() {
-      const query = document.getElementById("search").value.toLowerCase();
-      const rows = document.querySelectorAll("#recordsTable tbody tr");
-      rows.forEach(row => {
-        row.style.display = row.textContent.toLowerCase().includes(query) ? "" : "none";
-      });
-    }
-
-    function loadChart(data) {
-      const monthSummary = {};
-      data.slice(1).forEach(row => {
-        const date = new Date(row[0]);
-        const month = date.toLocaleString("default", { month: "short", year: "numeric" });
-        if (!monthSummary[month]) monthSummary[month] = { income: 0, expense: 0 };
-        if (row[1] === "Income") monthSummary[month].income += Number(row[3]);
-        else monthSummary[month].expense += Number(row[3]);
-      });
-
-      const labels = Object.keys(monthSummary);
-      const incomeData = labels.map(m => monthSummary[m].income);
-      const expenseData = labels.map(m => monthSummary[m].expense);
-
-      const ctx = document.getElementById("monthlyChart").getContext("2d");
-      if (window.myChart) window.myChart.destroy();
-
-      window.myChart = new Chart(ctx, {
-        type: "bar",
-        data: {
-          labels: labels,
-          datasets: [
-            {
-              label: "Income",
-              data: incomeData,
-              backgroundColor: "rgba(40,167,69,0.7)",
-            },
-            {
-              label: "Expense",
-              data: expenseData,
-              backgroundColor: "rgba(220,53,69,0.7)",
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Expense Tracker (Firestore)</title>
+    <!-- Load Tailwind CSS CDN for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configure Tailwind to use Inter font and custom colors if needed -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        'income': '#10b981', // Emerald green
+                        'expense': '#ef4444', // Red
+                        'primary-blue': '#3b82f6', // Blue
+                        'secondary-gray': '#f3f4f6', // Light Gray
+                    }
+                }
             }
-          ]
-        },
-        options: {
-          responsive: true,
-          scales: { y: { beginAtZero: true } }
         }
-      });
-    }
+    </script>
+    <!-- Load Chart.js CDN for charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <style>
+        /* Base styles */
+        body {
+            background-color: #f7f9fb;
+            color: #1f2937;
+        }
+        /* Custom scrollbar styling for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: #d1d5db;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: #9ca3af;
+        }
+        /* Smooth transitions for interactive elements */
+        .btn-transition {
+            transition: all 0.2s ease-in-out;
+        }
+    </style>
+</head>
+<body class="font-sans min-h-screen">
 
-    function exportCSV() {
-      let csv = [];
-      document.querySelectorAll("#recordsTable tr").forEach(row => {
-        const cells = [...row.children].map(td => `"${td.textContent}"`);
-        csv.push(cells.join(","));
-      });
-      const blob = new Blob([csv.join("\n")], { type: "text/csv" });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "ExpenseData.csv";
-      link.click();
-    }
+    <div id="app" class="max-w-7xl mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-extrabold text-primary-blue mb-2">Daily Expense Tracker (Firestore)</h1>
+            <p class="text-gray-500">Record, track, and manage your finances seamlessly.</p>
+        </header>
 
-    window.onload = loadRecords;
-  </script>
+        <!-- Notification/Loading Area -->
+        <div id="message-area" class="fixed top-4 right-4 z-50"></div>
+        <div id="loading-overlay" class="fixed inset-0 bg-gray-100 bg-opacity-80 flex items-center justify-center z-40 hidden">
+            <div class="p-6 bg-white rounded-lg shadow-xl flex items-center space-x-3">
+                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-blue"></div>
+                <span class="text-lg font-medium text-gray-700">Loading data...</span>
+            </div>
+        </div>
+        
+        <!-- User ID Display for Firestore Pathing -->
+        <div class="mb-4 text-center text-sm text-gray-500">
+            Current User ID (Private Data Path): <span id="user-id-display" class="font-mono text-gray-700">Initializing...</span>
+        </div>
+
+        <!-- Main Grid Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Column 1: Add New Record & Summary -->
+            <div class="lg:col-span-1 space-y-6">
+
+                <!-- Summary Card -->
+                <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-700">Financial Overview</h2>
+                    <div id="summary" class="space-y-3">
+                        <div class="flex justify-between items-center p-3 rounded-lg bg-secondary-gray">
+                            <span class="font-medium">Total Income:</span>
+                            <span id="total-income" class="text-income font-bold text-xl">$0.00</span>
+                        </div>
+                        <div class="flex justify-between items-center p-3 rounded-lg bg-secondary-gray">
+                            <span class="font-medium">Total Expenses:</span>
+                            <span id="total-expense" class="text-expense font-bold text-xl">$0.00</span>
+                        </div>
+                        <div class="flex justify-between items-center p-3 rounded-lg" id="balance-container">
+                            <span class="font-medium text-lg">Balance:</span>
+                            <span id="balance" class="font-extrabold text-2xl text-gray-800">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add New Record Form -->
+                <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-700">Add New Record</h2>
+                    <form id="record-form" class="space-y-4">
+                        <input type="hidden" name="action" value="addRecord">
+                        <div>
+                            <label for="date" class="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                            <input type="date" id="date" name="Date" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-blue focus:border-primary-blue">
+                        </div>
+                        <div>
+                            <label for="type" class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                            <select id="type" name="Type" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-blue focus:border-primary-blue">
+                                <option value="Income">Income</option>
+                                <option value="Expense" selected>Expense</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="category" class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                            <input type="text" id="category" name="Category" placeholder="e.g., Salary, Groceries, Rent" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-blue focus:border-primary-blue">
+                        </div>
+                        <div>
+                            <label for="amount" class="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                            <input type="number" step="0.01" id="amount" name="Amount" placeholder="0.00" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-blue focus:border-primary-blue">
+                        </div>
+                        <div>
+                            <label for="notes" class="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
+                            <textarea id="notes" name="Notes" rows="2" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-blue focus:border-primary-blue"></textarea>
+                        </div>
+                        <button type="submit" id="add-record-btn" class="w-full bg-income text-white p-3 rounded-lg font-semibold hover:bg-emerald-600 focus:outline-none focus:ring-4 focus:ring-income/50 btn-transition flex items-center justify-center" disabled>
+                            <span id="btn-text">Waiting for Auth...</span>
+                            <div id="btn-spinner" class="animate-spin rounded-full h-5 w-5 border-b-2 border-white ml-2 hidden"></div>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Column 2 & 3: Records, Filters, and Chart -->
+            <div class="lg:col-span-2 space-y-6">
+
+                <!-- Monthly Summary Chart -->
+                <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-700">Monthly Flow Chart</h2>
+                    <div class="h-64 md:h-80">
+                        <canvas id="monthly-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Filters and Controls -->
+                <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-700">Filter & Utilities</h2>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                        <select id="filter-month" class="col-span-2 md:col-span-1 p-3 border border-gray-300 rounded-lg focus:ring-primary-blue focus:border-primary-blue">
+                            <option value="">All Months</option>
+                            <!-- Options populated dynamically -->
+                        </select>
+                        <input type="text" id="filter-category-keyword" placeholder="Search Category/Notes" class="col-span-2 md:col-span-1 p-3 border border-gray-300 rounded-lg focus:ring-primary-blue focus:border-primary-blue">
+                        <button id="clear-all-btn" class="col-span-2 md:col-span-1 bg-red-500 text-white p-3 rounded-lg font-semibold hover:bg-red-600 focus:outline-none focus:ring-4 focus:ring-red-500/50 btn-transition" disabled>
+                            Clear All Records
+                        </button>
+                        <button id="export-btn" class="col-span-2 md:col-span-1 bg-gray-600 text-white p-3 rounded-lg font-semibold hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-600/50 btn-transition">
+                            Export CSV
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Records Table -->
+                <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100 overflow-x-auto">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-700">Recent Records (<span id="record-count">0</span>)</h2>
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-secondary-gray">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="records-table-body" class="bg-white divide-y divide-gray-200">
+                            <!-- Records will be injected here -->
+                            <tr><td colspan="5" class="p-4 text-center text-gray-500">No records found.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module">
+        // =================================================================================
+        // FIREBASE SETUP AND IMPORTS
+        // =================================================================================
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            collection, 
+            query, 
+            addDoc, 
+            onSnapshot, 
+            deleteDoc,
+            doc,
+            writeBatch,
+            setLogLevel,
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // Firestore is the database; all data will be stored here.
+        let app;
+        let db;
+        let auth;
+        let userId = null;
+        let isAuthReady = false;
+        let unsubscribeSnapshot = null; // To store the onSnapshot listener function
+
+        // Global variables provided by the environment (MANDATORY)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Set log level to debug for troubleshooting Firestore
+        setLogLevel('debug');
+        
+        // =================================================================================
+        // GLOBAL STATE & UTILITIES
+        // =================================================================================
+
+        let allRecords = []; // Stores all fetched records
+        let visibleRecords = []; // Stores records after filtering
+        let monthlyChart = null;
+
+        const elements = {
+            messageArea: document.getElementById('message-area'),
+            loadingOverlay: document.getElementById('loading-overlay'),
+            recordForm: document.getElementById('record-form'),
+            addRecordBtn: document.getElementById('add-record-btn'),
+            btnText: document.getElementById('btn-text'),
+            btnSpinner: document.getElementById('btn-spinner'),
+            totalIncome: document.getElementById('total-income'),
+            totalExpense: document.getElementById('total-expense'),
+            balance: document.getElementById('balance'),
+            balanceContainer: document.getElementById('balance-container'),
+            filterMonth: document.getElementById('filter-month'),
+            filterKeyword: document.getElementById('filter-category-keyword'),
+            recordsTableBody: document.getElementById('records-table-body'),
+            recordCount: document.getElementById('record-count'),
+            clearAllBtn: document.getElementById('clear-all-btn'),
+            exportBtn: document.getElementById('export-btn'),
+            chartCanvas: document.getElementById('monthly-chart'),
+            dateInput: document.getElementById('date'),
+            userIdDisplay: document.getElementById('user-id-display'),
+        };
+
+        // Utility to format number as currency
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                minimumFractionDigits: 2,
+            }).format(amount);
+        };
+
+        // Utility to show temporary notification
+        const showNotification = (message, type = 'success') => {
+            const colors = {
+                success: 'bg-green-500 border-green-700',
+                error: 'bg-red-500 border-red-700',
+                info: 'bg-blue-500 border-blue-700',
+            };
+
+            const notification = document.createElement('div');
+            notification.className = `p-4 mb-2 rounded-lg text-white shadow-xl border-l-4 ${colors[type]}`;
+            notification.textContent = message;
+
+            elements.messageArea.prepend(notification);
+
+            // Automatically hide after 5 seconds
+            setTimeout(() => {
+                notification.classList.add('opacity-0', 'transition-opacity', 'duration-500', 'ease-out');
+                notification.addEventListener('transitionend', () => notification.remove());
+            }, 5000);
+        };
+
+        // =================================================================================
+        // FIREBASE INITIALIZATION AND AUTHENTICATION
+        // =================================================================================
+
+        const initFirebase = async () => {
+            if (!firebaseConfig) {
+                showNotification("Firebase configuration is missing.", 'error');
+                return;
+            }
+
+            try {
+                elements.loadingOverlay.classList.remove('hidden');
+
+                // 1. Initialize App and Services
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                // 2. Handle Authentication
+                // Use custom token if available, otherwise sign in anonymously
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                
+                // 3. Set up Auth State Listener
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        isAuthReady = true;
+                        elements.userIdDisplay.textContent = userId;
+                        elements.addRecordBtn.disabled = false;
+                        elements.clearAllBtn.disabled = false;
+                        elements.btnText.textContent = 'Add Record';
+                        setupFirestoreListener(); // Start listening for data
+                        console.log("Firebase Auth Ready. User ID:", userId);
+                    } else {
+                        userId = null;
+                        isAuthReady = false;
+                        elements.userIdDisplay.textContent = 'Not Authenticated';
+                        elements.addRecordBtn.disabled = true;
+                        elements.clearAllBtn.disabled = true;
+                        elements.btnText.textContent = 'Log In First';
+                        console.error("Firebase User Not Logged In.");
+                        elements.loadingOverlay.classList.add('hidden'); // Ensure loading is off if auth fails
+                    }
+                });
+            } catch (e) {
+                console.error("Firebase initialization failed:", e);
+                showNotification(`Authentication failed: ${e.message}`, 'error');
+                elements.loadingOverlay.classList.add('hidden');
+            }
+        };
+
+        // =================================================================================
+        // FIRESTORE DATA MANAGEMENT
+        // =================================================================================
+
+        // Builds the Firestore collection path based on the user ID
+        const getRecordsCollectionRef = () => {
+            if (!userId) {
+                console.error("Attempted to access Firestore before authentication.");
+                return null;
+            }
+            // Private data path: /artifacts/{appId}/users/{userId}/records
+            const path = `artifacts/${appId}/users/${userId}/records`;
+            return collection(db, path);
+        };
+
+        // Set up real-time listener using onSnapshot
+        const setupFirestoreListener = () => {
+            if (unsubscribeSnapshot) {
+                unsubscribeSnapshot(); // Stop previous listener if it exists
+            }
+
+            const colRef = getRecordsCollectionRef();
+            if (!colRef) return;
+            
+            elements.loadingOverlay.classList.remove('hidden');
+
+            // Listen for real-time updates
+            unsubscribeSnapshot = onSnapshot(colRef, (snapshot) => {
+                const fetchedRecords = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    fetchedRecords.push({
+                        ...data,
+                        id: doc.id, // Keep the document ID for possible deletion/update
+                        Amount: parseFloat(data.Amount || 0),
+                        // Assuming Date is stored as 'YYYY-MM-DD' string
+                        Timestamp: new Date(data.Date),
+                    });
+                });
+                
+                // Sort by date descending
+                allRecords = fetchedRecords.sort((a, b) => b.Timestamp - a.Timestamp);
+                
+                applyFilters(); // Re-render UI with new data
+                populateFilterOptions();
+                elements.loadingOverlay.classList.add('hidden');
+                console.log("Data loaded from Firestore.");
+            }, (error) => {
+                console.error("Firestore snapshot error:", error);
+                showNotification(`Real-time data failed to load: ${error.message}`, 'error');
+                elements.loadingOverlay.classList.add('hidden');
+            });
+        };
+
+
+        // Handle form submission to add a new record (Create operation)
+        const handleFormSubmit = async (e) => {
+            e.preventDefault();
+
+            if (!isAuthReady || !userId || !db) {
+                showNotification('Authentication not ready. Please wait.', 'error');
+                return;
+            }
+
+            const formData = new FormData(elements.recordForm);
+            
+            const recordData = {
+                Date: formData.get('Date'),
+                Type: formData.get('Type'),
+                Category: formData.get('Category'),
+                Amount: formData.get('Amount'),
+                Notes: formData.get('Notes') || '',
+            };
+            
+            if (!recordData.Date || !recordData.Amount) {
+                showNotification('Please fill in Date and Amount.', 'error');
+                return;
+            }
+
+            // UI state: disable button and show spinner
+            elements.addRecordBtn.disabled = true;
+            elements.btnText.textContent = 'Adding...';
+            elements.btnSpinner.classList.remove('hidden');
+
+            try {
+                const colRef = getRecordsCollectionRef();
+                if (colRef) {
+                    await addDoc(colRef, recordData);
+                    showNotification("Record successfully added to Firestore!");
+                    elements.recordForm.reset(); // Clear the form
+                    elements.dateInput.value = new Date().toISOString().slice(0, 10); // Set default date
+                }
+            } catch (error) {
+                console.error("Error adding record to Firestore:", error);
+                showNotification(`Failed to add record: ${error.message}`, 'error');
+            } finally {
+                // UI state: enable button and hide spinner
+                elements.addRecordBtn.disabled = false;
+                elements.btnText.textContent = 'Add Record';
+                elements.btnSpinner.classList.add('hidden');
+            }
+        };
+
+        // Handle "Clear All Records" functionality
+        const handleClearAll = async () => {
+            if (!isAuthReady || !userId || !db) {
+                showNotification('Authentication not ready. Cannot clear records.', 'error');
+                return;
+            }
+
+            // Custom confirmation dialog (replacing native alert/confirm)
+            if (!confirmClearAll()) {
+                return;
+            }
+
+            elements.clearAllBtn.disabled = true;
+            elements.clearAllBtn.textContent = 'Clearing...';
+
+            try {
+                const colRef = getRecordsCollectionRef();
+                if (!colRef) throw new Error("Collection reference is null.");
+
+                // To delete records in bulk, we must read their IDs first.
+                // NOTE: This uses the currently filtered 'allRecords' which is loaded from the snapshot.
+                
+                // Firestore writeBatch is used for up to 500 operations
+                const batch = writeBatch(db);
+                let deletedCount = 0;
+
+                allRecords.forEach(record => {
+                    const docRef = doc(db, colRef.path, record.id);
+                    batch.delete(docRef);
+                    deletedCount++;
+                });
+
+                if (deletedCount > 0) {
+                    await batch.commit();
+                    showNotification(`Successfully deleted ${deletedCount} records.`, 'info');
+                } else {
+                     showNotification("No records to delete.", 'info');
+                }
+
+            } catch (error) {
+                console.error("Error during batch deletion:", error);
+                showNotification(`Failed to clear records: ${error.message}`, 'error');
+            } finally {
+                elements.clearAllBtn.disabled = false;
+                elements.clearAllBtn.textContent = 'Clear All Records';
+            }
+        };
+
+        // Custom modal confirmation (as alert/confirm are disallowed)
+        const confirmClearAll = () => {
+            // A simple implementation using window.prompt for mandatory user input 
+            // for deletion, since modal UI is too complex for this single-file context.
+            // In a production app, this would be a sophisticated modal UI.
+            const confirmation = window.prompt("WARNING: This will permanently DELETE ALL your expense records. To confirm, type the word 'DELETE' below:");
+            return confirmation === 'DELETE';
+        };
+
+        // =================================================================================
+        // UI RENDERING AND LOGIC (Mostly unchanged from previous version)
+        // =================================================================================
+
+        // Update the monthly filter dropdown
+        const populateFilterOptions = () => {
+            // ... (Logic remains the same)
+            const months = new Set();
+            allRecords.forEach(record => {
+                const date = new Date(record.Timestamp);
+                months.add(`${date.getFullYear()}-${date.getMonth() + 1}`);
+            });
+
+            const sortedMonths = Array.from(months).sort().reverse();
+            elements.filterMonth.innerHTML = '<option value="">All Months</option>';
+
+            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+            sortedMonths.forEach(ym => {
+                const [year, monthIndex] = ym.split('-');
+                const monthName = monthNames[parseInt(monthIndex) - 1];
+                const option = document.createElement('option');
+                option.value = ym;
+                option.textContent = `${monthName} ${year}`;
+                elements.filterMonth.appendChild(option);
+            });
+        };
+
+
+        // Apply filters based on user input
+        const applyFilters = () => {
+            // ... (Logic remains the same)
+            const selectedMonthYear = elements.filterMonth.value; // e.g., "2023-10"
+            const keyword = elements.filterKeyword.value.toLowerCase().trim();
+
+            visibleRecords = allRecords.filter(record => {
+                const date = new Date(record.Timestamp);
+                const recordMonthYear = `${date.getFullYear()}-${date.getMonth() + 1}`;
+
+                // Filter by month/year
+                const monthMatch = !selectedMonthYear || recordMonthYear === selectedMonthYear;
+
+                // Filter by category or notes keyword
+                const keywordMatch = !keyword || 
+                                     record.Category.toLowerCase().includes(keyword) || 
+                                     record.Notes.toLowerCase().includes(keyword);
+
+                return monthMatch && keywordMatch;
+            });
+
+            renderUI();
+        };
+
+        // Render the main UI components
+        const renderUI = () => {
+            displayRecords(visibleRecords);
+            updateSummary(visibleRecords);
+            drawChart(visibleRecords);
+        };
+
+        // Display records in the table
+        const displayRecords = (records) => {
+            // ... (Logic remains the same)
+            elements.recordsTableBody.innerHTML = '';
+            elements.recordCount.textContent = records.length;
+
+            if (records.length === 0) {
+                elements.recordsTableBody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500">No records match the current filters.</td></tr>';
+                return;
+            }
+
+            records.forEach(record => {
+                const row = document.createElement('tr');
+                const isExpense = record.Type === 'Expense';
+                const typeClass = isExpense ? 'text-expense' : 'text-income';
+
+                row.className = 'hover:bg-gray-50';
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${record.Date}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium ${typeClass}">${record.Type}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${record.Category}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-right ${typeClass}">${formatCurrency(record.Amount)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">${record.Notes}</td>
+                `;
+                elements.recordsTableBody.appendChild(row);
+            });
+        };
+
+        // Update total income, expenses, and balance
+        const updateSummary = (records) => {
+            // ... (Logic remains the same)
+            let income = 0;
+            let expense = 0;
+
+            records.forEach(record => {
+                if (record.Type === 'Income') {
+                    income += record.Amount;
+                } else if (record.Type === 'Expense') {
+                    expense += record.Amount;
+                }
+            });
+
+            const balance = income - expense;
+
+            elements.totalIncome.textContent = formatCurrency(income);
+            elements.totalExpense.textContent = formatCurrency(expense);
+            elements.balance.textContent = formatCurrency(Math.abs(balance));
+
+            // Update balance container color based on status
+            elements.balanceContainer.className = 'flex justify-between items-center p-3 rounded-lg';
+            if (balance >= 0) {
+                elements.balanceContainer.classList.add('bg-income/20', 'text-income');
+            } else {
+                elements.balanceContainer.classList.add('bg-expense/20', 'text-expense');
+            }
+        };
+
+        // Draw or update the Chart.js chart
+        const drawChart = (records) => {
+            // ... (Logic remains the same)
+            // Group data by day/month for the chart
+            const monthlyData = {};
+            const currentDate = new Date();
+            const currentMonthYear = `${currentDate.getFullYear()}-${currentDate.getMonth()}`;
+
+            records.forEach(record => {
+                const date = new Date(record.Timestamp);
+                const monthYear = `${date.getFullYear()}-${date.getMonth()}`;
+                
+                // Only chart data for the currently selected or global view
+                if (elements.filterMonth.value) {
+                    // Check if record date matches selected month
+                    const selectedDate = elements.filterMonth.value.split('-');
+                    const selectedMonthYearMatch = (date.getFullYear() == selectedDate[0] && (date.getMonth() + 1) == selectedDate[1]);
+                    if (!selectedMonthYearMatch) return;
+                } else if (monthYear !== currentMonthYear) {
+                    // If no filter, only show current month's data
+                    // return;
+                }
+                
+                const day = date.getDate();
+                
+                if (!monthlyData[day]) {
+                    monthlyData[day] = { income: 0, expense: 0 };
+                }
+
+                if (record.Type === 'Income') {
+                    monthlyData[day].income += record.Amount;
+                } else {
+                    monthlyData[day].expense += record.Amount;
+                }
+            });
+
+            // Prepare Chart.js data
+            const sortedDays = Object.keys(monthlyData).sort((a, b) => parseInt(a) - parseInt(b));
+            const labels = sortedDays.map(day => `Day ${day}`);
+            const incomeData = sortedDays.map(day => monthlyData[day].income);
+            const expenseData = sortedDays.map(day => monthlyData[day].expense);
+
+            const data = {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Income',
+                        data: incomeData,
+                        backgroundColor: 'rgba(16, 185, 129, 0.6)', // income color
+                        borderColor: 'rgba(16, 185, 129, 1)',
+                        tension: 0.3,
+                        fill: false,
+                    },
+                    {
+                        label: 'Expense',
+                        data: expenseData,
+                        backgroundColor: 'rgba(239, 68, 68, 0.6)', // expense color
+                        borderColor: 'rgba(239, 68, 68, 1)',
+                        tension: 0.3,
+                        fill: false,
+                    }
+                ]
+            };
+
+            const config = {
+                type: 'line',
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' },
+                        title: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            };
+
+            // Destroy previous chart instance if it exists
+            if (monthlyChart) {
+                monthlyChart.destroy();
+            }
+            monthlyChart = new Chart(elements.chartCanvas, config);
+        };
+
+        // Export data to CSV
+        const handleExport = () => {
+            // ... (Logic remains the same)
+            const headers = ["Date", "Type", "Category", "Amount", "Notes"];
+            const rows = visibleRecords.map(r => [
+                r.Date, 
+                r.Type, 
+                r.Category, 
+                r.Amount, 
+                r.Notes.replace(/"/g, '""') // Escape double quotes for CSV
+            ]);
+
+            // Combine headers and rows
+            const csvContent = [
+                headers.join(","),
+                ...rows.map(row => row.join(","))
+            ].join("\n");
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            
+            // Generate filename based on current filter
+            const filename = elements.filterMonth.value 
+                ? `expense_report_${elements.filterMonth.options[elements.filterMonth.selectedIndex].text.replace(/\s/g, '_')}.csv`
+                : "expense_report_all.csv";
+
+            if (link.download !== undefined) {
+                link.setAttribute("href", URL.createObjectURL(blob));
+                link.setAttribute("download", filename);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showNotification("Data exported successfully!");
+            } else {
+                showNotification("Export failed. Your browser does not support automatic downloads.", 'error');
+            }
+        };
+
+        // =================================================================================
+        // INITIALIZATION AND EVENT LISTENERS
+        // =================================================================================
+        
+        // Set today's date as default
+        elements.dateInput.value = new Date().toISOString().slice(0, 10);
+
+        // Add event listeners
+        elements.recordForm.addEventListener('submit', handleFormSubmit);
+        elements.filterMonth.addEventListener('change', applyFilters);
+        elements.filterKeyword.addEventListener('input', applyFilters);
+        elements.clearAllBtn.addEventListener('click', handleClearAll); // Updated button
+        elements.exportBtn.addEventListener('click', handleExport);
+
+        // Initialize Firebase on page load
+        window.onload = initFirebase; 
+
+    </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
